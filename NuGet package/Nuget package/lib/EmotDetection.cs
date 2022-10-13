@@ -3,6 +3,7 @@ using Microsoft.ML.OnnxRuntime.Tensors;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
+
 static public class EmotDetection
 {
     static private InferenceSession? session = null;
@@ -12,6 +13,7 @@ static public class EmotDetection
     static private readonly object lockSession = new object();
     static public async Task<float[]> EmotionProbability(Image<Rgb24> img, CancellationToken token)
     {
+        //Initialize new onnx session if it wasn't init yet
         if (session == null)
         {
             using var modelStream = typeof(EmotDetection).Assembly.GetManifestResourceStream("lib.emotion-ferplus-7.onnx");
@@ -20,7 +22,7 @@ static public class EmotDetection
             session = new InferenceSession(memoryStream.ToArray());
         }
 
-        //start new process
+        //Get new task
         return await Task<float[]>.Factory.StartNew(() =>
         {
             token.ThrowIfCancellationRequested();
@@ -29,13 +31,14 @@ static public class EmotDetection
                 ctx.Resize(new Size(64, 64));
             });
             var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor("Input3", GrayscaleImageToTensor(img)) };
+
             lock (lockSession)
             {
                 token.ThrowIfCancellationRequested();
                 var result = session.Run(inputs);
                 return Softmax(result.First(v => v.Name == "Plus692_Output_0").AsEnumerable<float>().ToArray());
             }
-        }, token);
+        }, token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
     }
 
     static private float[] Softmax(float[] z)
