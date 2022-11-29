@@ -26,16 +26,17 @@
             <Label Content="_Sort by"/>
             <ComboBox Name="comboBox" ItemsSource="{Binding Emotions}"
                       SelectedItem="{Binding selectedEmot}" SelectionChanged="SortList"/>
-            <StackPanel x:Name="Execution" Visibility="Hidden">
+            <StackPanel x:Name="execution" Visibility="Hidden">
                 <Label Content="_Execution"/>
+                <ProgressBar x:Name="pBar" Minimum="0" Maximum="100" IsIndeterminate="True"/>
             </StackPanel>
         </StackPanel>
 
-        <ListBox Name="listBox" Grid.Row="1"  Grid.Column="1">
+        <ListBox Name="listBox" Grid.Row="1"  Grid.Column="1" ItemsSource="{Binding new_Data}">
             <ListBox.ItemTemplate>
                 <DataTemplate>
-                    <StackPanel>
-                        <TextBlock Text="{Binding FileName}"/>
+                    <StackPanel Orientation="Horizontal">
+                        <Image Width="64" Height="64" Source="{Binding SourceImage}" />
                         <ListBox ItemsSource="{Binding Emotions}">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
@@ -43,6 +44,7 @@
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
                         </ListBox>
+                        <Button x:Name="Delite" Content="_Delete" Click="DeleteFromDB"/>
                     </StackPanel>
                 </DataTemplate>
             </ListBox.ItemTemplate>
