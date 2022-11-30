@@ -1,0 +1,62 @@
+﻿<Window x:Class="UI_conc.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:UI_conc"
+        mc:Ignorable="d"
+        Title="MainWindow" Height="450" Width="800">
+    
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="3*" />
+        </Grid.ColumnDefinitions>
+
+        <Grid.RowDefinitions>
+            <RowDefinition Height="20"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Menu x:Name="menu" Grid.ColumnSpan="2" Grid.RowSpan="1">
+            <MenuItem Header="Open" Command="Open" InputGestureText="Ctrl+O"/>
+        </Menu>
+
+        <StackPanel Grid.Row="1" Grid.Column="0" VerticalAlignment="Center">
+            <Label Content="_Sort by"/>
+            <ComboBox Name="comboBox" ItemsSource="{Binding Emotions}"
+                      SelectedItem="{Binding selectedEmot}" SelectionChanged="SortList"/>
+            <StackPanel x:Name="execution" Visibility="Hidden">
+                <Label Content="_Execution"/>
+                <ProgressBar x:Name="pBar" Minimum="0" Maximum="100" IsIndeterminate="True"/>
+                <Button Name="Cancel" Content="_Cancel" Click="CancelProcess" />
+            </StackPanel>
+        </StackPanel>
+
+        <ListBox Name="listBox" Grid.Row="1"  Grid.Column="1" ItemsSource="{Binding new_Data}">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Orientation="Horizontal">
+                        <Image Width="64" Height="64" Source="{Binding SourceImage}" />
+                        <ListBox ItemsSource="{Binding Emotions}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}"/>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <!--<Button x:Name="Delite" Content="_Delete" Click="DeleteFromDB"/>-->
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </Grid>
+
+    <Window.CommandBindings>
+        <CommandBinding Command="Open" Executed="Open"/>
+    </Window.CommandBindings>
+
+    <Window.InputBindings>
+        <KeyBinding Key="O" Modifiers="Control" Command="Open"/>
+    </Window.InputBindings>
+</Window>
