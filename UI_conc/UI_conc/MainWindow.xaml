@@ -29,6 +29,7 @@
             <StackPanel x:Name="execution" Visibility="Hidden">
                 <Label Content="_Execution"/>
                 <ProgressBar x:Name="pBar" Minimum="0" Maximum="100" IsIndeterminate="True"/>
+                <Button Name="Cancel" Content="_Cancel" Click="CancelProcess" />
             </StackPanel>
         </StackPanel>
 
@@ -44,7 +45,7 @@
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
                         </ListBox>
-                        <Button x:Name="Delite" Content="_Delete" Click="DeleteFromDB"/>
+                        <!--<Button x:Name="Delite" Content="_Delete" Click="DeleteFromDB"/>-->
                     </StackPanel>
                 </DataTemplate>
             </ListBox.ItemTemplate>
