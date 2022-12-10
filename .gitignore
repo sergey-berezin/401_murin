@@ -11,8 +11,8 @@
 
 #VS
 .vs/
-bin/
-obj/
+.bin/
+.obj/
 
 # Build results
 
