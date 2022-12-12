@@ -29,6 +29,7 @@
             <StackPanel x:Name="execution" Visibility="Hidden">
                 <Label Content="_Execution"/>
                 <ProgressBar x:Name="pBar" Minimum="0" Maximum="100" IsIndeterminate="True"/>
+                <Button Name="Cancel" Content="_Cancel" Click="CancelProcess" />
             </StackPanel>
         </StackPanel>
 

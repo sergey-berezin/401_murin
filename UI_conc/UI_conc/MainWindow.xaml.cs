@@ -11,12 +11,12 @@ using System.Collections.ObjectModel;
 using System.Windows.Controls;
 using System.IO;
 using SixLabors.ImageSharp.Processing;
-using Newtonsoft.Json.Linq;
-using Newtonsoft.Json;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Media.Imaging;
 using System.Drawing.Imaging;
+using System.Reflection.Metadata;
+using System.Security.Policy;
 
 namespace UI_conc
 {
@@ -25,16 +25,21 @@ namespace UI_conc
         public string[] Emotions { get; } = { "neutral", "happiness", "surprise", "sadness", "anger", "disgust", "fear", "contempt" };
         public ObservableCollection<EmotionsImg> new_Data { get; set; } = new ObservableCollection<EmotionsImg>();
         public string selectedEmot { get; set; } = string.Empty;
-        JArray db = JArray.Parse(File.ReadAllText("db.json"));
+
+        CancellationTokenSource cancellationTokenSource;
+        CancellationToken token;
+
+        public ImagesContext db;
         public MainWindow()
         {
+            cancellationTokenSource = new CancellationTokenSource();
+            token = cancellationTokenSource.Token;
             InitializeComponent();
             DataContext = this;
-            foreach (var el in db)
+            db = new ImagesContext();
+            foreach (var el in db.Images)
             {
-                new_Data.Add(new EmotionsImg(new Bitmap(new MemoryStream(
-                    JsonConvert.DeserializeObject<byte[]>((string?)el["blob"]))),
-                    JsonConvert.DeserializeObject<List<(string, float)>>((string?)el["emotions"])));
+                new_Data.Add(new EmotionsImg(new Bitmap(new MemoryStream(el.Blob)), el.Emotions));
             }
         }
 
@@ -53,9 +58,9 @@ namespace UI_conc
             }
         }
 
-        private (string,float) FindEl(IEnumerable<(string, float)> en)
+        private (string, float) FindEl(IEnumerable<(string, float)> en)
         {
-            foreach(var el in en)
+            foreach (var el in en)
             {
                 if (el.Item1 == selectedEmot)
                     return el;
@@ -75,7 +80,11 @@ namespace UI_conc
 
         private async void DoAdd()
         {
-            
+            await App.Current.Dispatcher.BeginInvoke((Action)delegate ()
+            {
+                menu.IsEnabled = false;
+            });
+
             var dlg = new Ookii.Dialogs.Wpf.VistaOpenFileDialog();
             dlg.Filter = "Image Files(*.BMP;*.JPG;*.PNG)|*.BMP;*.JPG;*.PNG";
             dlg.Multiselect = true;
@@ -86,10 +95,6 @@ namespace UI_conc
                 {
                     execution.Visibility = Visibility.Visible;
                 });
-
-
-                var cancelTokenSource = new CancellationTokenSource();
-                var token = cancelTokenSource.Token;
 
                 var tasks = new Task<float[]>[dlg.FileNames.Length];
                 var exec = new bool[dlg.FileNames.Length];
@@ -102,29 +107,25 @@ namespace UI_conc
                         ctx.Resize(new SixLabors.ImageSharp.Size(64, 64));
                     });
                     var blob = BitmapToArray(ToBitmap(imgs[i]));
-                    var hash = 17;
+                    int hash = 17;
                     foreach (byte element in blob)
                     {
                         hash = hash * 31 + element.GetHashCode();
                     }
-                    var similar = db.SelectTokens($"$[?(@.hash == {hash})]");
+                    var similar = db.Images.Where(el => el.Hash.Equals(hash))
+                        .Where(el => el.Blob.SequenceEqual(blob)).FirstOrDefault();
                     exec[i] = true;
-                    foreach (var el in similar)
+                    if (similar != null)
                     {
-                        var el_bl = JsonConvert.DeserializeObject<byte[]>((string?)el["blob"]);
-                        if (el_bl.SequenceEqual(blob))
+                        await App.Current.Dispatcher.BeginInvoke((Action)delegate ()
                         {
-                            await App.Current.Dispatcher.BeginInvoke((Action)delegate ()
-                            {
-                                var img_from_db = new EmotionsImg(new Bitmap(new MemoryStream(el_bl)), 
-                                    JsonConvert.DeserializeObject<List<(string, float)>>((string?)el["emotions"]));
-                                new_Data.Add(img_from_db);
-                            });
-                            exec[i] = false;
-                            break;
-                        }
+                            var img_from_db = new EmotionsImg(new Bitmap(new MemoryStream(similar.Blob)),
+                                new List<Emotion>(similar.Emotions));
+                            new_Data.Add(img_from_db);
+                        });
+                        exec[i] = false;
                     }
-                    if (exec[i])
+                    else
                     {
                         tasks[i] = EmotDetection.EmotionProbability(imgs[i], token);
                     }
@@ -134,31 +135,42 @@ namespace UI_conc
                 {
                     if (exec[i])
                     {
-                        tasks[i].Wait();
-                        await App.Current.Dispatcher.BeginInvoke((Action)delegate()
+                        try
                         {
-                            var res = ToJObj(ToBitmap(imgs[i]), EmotDetection.ZipWithKeys(tasks[i].Result));
-                            db.Add(res);
-                            new_Data.Add(new EmotionsImg(ToBitmap(imgs[i]), EmotDetection.ZipWithKeys(tasks[i].Result)));
-                        });
+                            tasks[i].Wait();
+                            await App.Current.Dispatcher.BeginInvoke((Action)delegate ()
+                            {
+                                var res = new Img(BitmapToArray(ToBitmap(imgs[i])), EmotDetection.ZipWithKeys(tasks[i].Result));
+                                db.Images.Add(res);
+                                new_Data.Add(new EmotionsImg(ToBitmap(imgs[i]), EmotDetection.ZipWithKeys(tasks[i].Result)));
+                            });
+                        }
+                        catch (AggregateException)
+                        {
+
+                        }
                     }
                 }
-                File.WriteAllText("db.json", db.ToString());
                 new_Data = new ObservableCollection<EmotionsImg>(new_Data.OrderByDescending(x => FindEl(x.Emotions).Item2));
                 await App.Current.Dispatcher.BeginInvoke((Action)delegate ()
                 {
                     execution.Visibility = Visibility.Hidden;
                 });
             }
+            db.SaveChanges();
+            await App.Current.Dispatcher.BeginInvoke((Action)delegate ()
+            {
+                menu.IsEnabled = true;
+            });
         }
 
-        public static Bitmap ToBitmap( Image<Rgb24> image)
+        public static Bitmap ToBitmap(Image<Rgb24> image)
         {
             using (var memoryStream = new MemoryStream())
             {
                 image.SaveAsJpeg(memoryStream);
                 memoryStream.Seek(0, SeekOrigin.Begin);
-                return new System.Drawing.Bitmap(memoryStream);
+                return new Bitmap(memoryStream);
             }
         }
 
@@ -171,32 +183,15 @@ namespace UI_conc
             }
         }
 
-        public static byte[] BitmapToArray(System.Drawing.Bitmap img)
+        public static byte[] BitmapToArray(Bitmap img)
         {
             using (var stream = new MemoryStream())
             {
                 var tmp = new Bitmap(img);
-                tmp.Save(stream, System.Drawing.Imaging.ImageFormat.Png);
+                tmp.Save(stream, ImageFormat.Png);
                 return stream.ToArray();
             }
         }
-
-        public static JObject ToJObj(Bitmap image, IEnumerable<(string, float)> emotions)
-        {
-            var blob = BitmapToArray(image);
-            var hash = 17;
-            foreach (byte element in blob)
-            {
-                hash = hash * 31 + element.GetHashCode();
-            }
-            var obj = new JObject(
-                new JProperty("hash", hash),
-                new JProperty("blob", JsonConvert.SerializeObject(blob)),
-                new JProperty("emotions", JsonConvert.SerializeObject(new List<(string, float)>(emotions)))
-            );
-            return obj;
-        }
-
 
         private void Open(object sender, RoutedEventArgs args)
         {
@@ -221,7 +216,7 @@ namespace UI_conc
             {
 
                 var deleteme = (EmotionsImg)cmd.DataContext;
-
+                new_Data.Remove(deleteme);
 
                 var blob = BitmapToArray(deleteme.Image);
                 var hash = 17;
@@ -229,19 +224,23 @@ namespace UI_conc
                 {
                     hash = hash * 31 + element.GetHashCode();
                 }
-                var similar = db.SelectTokens($"$[?(@.hash == {hash})]");
-                foreach (var el in similar)
+                var similar = db.Images.Where(el => el.Hash == hash)
+                    .Where(el => el.Blob.SequenceEqual(blob)).FirstOrDefault();
+                if (similar != null)
                 {
-                    var el_bl = JsonConvert.DeserializeObject<byte[]>((string?)el["blob"]);
-                    if (el_bl.SequenceEqual(blob))
-                    {
-                        el.Remove();
-                        break;
-                    }
+                    db.Remove(similar);
+                    db.SaveChanges();
                 }
-                File.WriteAllText("db.json", db.ToString());
-                new_Data.Remove(deleteme);
+                listBox.ItemsSource = new_Data;
             }
+        }
+
+        private void CancelProcess(object sender, RoutedEventArgs args)
+        {
+            App.Current.Dispatcher.BeginInvoke((Action)delegate ()
+            {
+                cancellationTokenSource.Cancel();
+            });
         }
     }
 }
